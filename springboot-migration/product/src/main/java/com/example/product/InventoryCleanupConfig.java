@@ -15,7 +15,7 @@ public class InventoryCleanupConfig {
     public InventoryCleanupConfig(InventoryService inventoryService) {
         this.inventoryService = inventoryService;
     }
-    // Schedule expired reservation cleanup i.e 1 minute
+    // Schedule expired reservation cleanup i.e 1 minute (1000ms = 1s)
     @Scheduled(fixedDelay = 60000)
     public void releaseExpiredReservations() {
         inventoryService.releaseExpiredReservations();
