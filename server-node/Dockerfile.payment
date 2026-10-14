@@ -1,0 +1,14 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --only=production
+
+COPY services/payment ./services/payment
+COPY services/shared ./services/shared
+
+EXPOSE 8084
+
+CMD ["npx", "nodemon", "services/payment/payment-service.js"]

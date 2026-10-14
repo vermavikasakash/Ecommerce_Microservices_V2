@@ -1,0 +1,213 @@
+name: e-commerce
+services:
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+    networks:
+      - ecommerce-network
+
+  # API Gateway
+  gateway:
+    image: ecommerce-gateway
+    container_name: ecommerce-gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - PORT=8080
+      - DEV_MODE=development
+      - PRODUCT_SERVICE_URL=http://product-service:8081
+      - CART_SERVICE_URL=http://cart-service:8082
+      - ORDER_SERVICE_URL=http://order-service:8083
+      - PAYMENT_SERVICE_URL=http://payment-service:8084
+      - AUTH_SERVICE_URL=http://auth-service:8085
+      - CLIENT_ORIGIN=http://localhost:3000
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret}
+    depends_on:
+      - product-service
+      - cart-service
+      - order-service
+      - payment-service
+      - auth-service
+      - rabbitmq
+    networks:
+      - ecommerce-network
+
+  # Product Service
+  product-service:
+    image: ecommerce-product-service
+    container_name: ecommerce-product-service
+    build:
+      context: .
+      dockerfile: Dockerfile.product
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/app
+      - /app/node_modules  
+    environment:
+      - PORT=8081
+      - DEV_MODE=development
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+    depends_on:
+      - mongodb
+    networks:
+      - ecommerce-network
+
+  # Cart Service
+  cart-service:
+    image: ecommerce-cart-service
+    container_name: ecommerce-cart-service
+    build:
+      context: .
+      dockerfile: Dockerfile.cart
+    ports:
+      - "8082:8082"
+    volumes:
+      - .:/app
+      - /app/node_modules  
+    environment:
+      - PORT=8082
+      - DEV_MODE=development
+      - PRODUCT_SERVICE_URL=http://product-service:8081
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+    depends_on:
+      product-service:
+        condition: service_started
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    networks:
+      - ecommerce-network
+
+  # Order Service
+  order-service:
+    image: ecommerce-order-service
+    container_name: ecommerce-order-service
+    build:
+      context: .
+      dockerfile: Dockerfile.order
+    ports:
+      - "8083:8083"
+    volumes:
+      - .:/app
+      - /app/node_modules  
+    environment:
+      - PORT=8083
+      - DEV_MODE=development
+      - CART_SERVICE_URL=http://cart-service:8082
+      - PAYMENT_SERVICE_URL=http://payment-service:8084
+      - PRODUCT_SERVICE_URL=http://product-service:8081
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+    depends_on:
+      cart-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    networks:
+      - ecommerce-network
+
+  # Payment Service
+  payment-service:
+    image: ecommerce-payment-service
+    container_name: ecommerce-payment-service
+    build:
+      context: .
+      dockerfile: Dockerfile.payment
+    ports:
+      - "8084:8084"
+    volumes:
+      - .:/app
+      - /app/node_modules  
+    environment:
+      - PORT=8084
+      - DEV_MODE=development
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+    depends_on:
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    networks:
+      - ecommerce-network
+
+  # Auth Service
+  auth-service:
+    image: ecommerce-auth-service
+    container_name: ecommerce-auth-service
+    build:
+      context: .
+      dockerfile: Dockerfile.auth
+    ports:
+      - "8085:8085"
+    volumes:
+      - .:/app
+      - /app/node_modules  
+    environment:
+      - PORT=8085
+      - DEV_MODE=development
+      - MONGODB_URI=mongodb://mongodb:27017/ecommerce
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret}
+    depends_on:
+      mongodb:
+        condition: service_started
+    networks:
+      - ecommerce-network
+
+  # RabbitMQ message broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ecommerce-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-network
+
+  # MongoDB
+  mongodb:
+    image: mongo:8
+    container_name: ecommerce-mongodb
+    command: ["mongod", "--bind_ip_all", "--quiet"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ecommerce-network
+
+volumes:
+  mongo-data:
+  rabbitmq-data:
+
+networks:
+  ecommerce-network:
+    driver: bridge

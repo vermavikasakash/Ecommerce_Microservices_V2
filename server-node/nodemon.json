@@ -1,0 +1,7 @@
+{
+  "watch": ["services"],
+  "ext": "js,json",
+  "legacyWatch": true,
+  "verbose": true,
+  "ignore": ["node_modules"]
+}

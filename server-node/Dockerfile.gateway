@@ -1,0 +1,14 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --only=production
+
+COPY services/gateway ./services/gateway
+COPY services/shared ./services/shared
+
+EXPOSE 8080
+
+CMD ["npx", "nodemon", "services/gateway/gateway.js"]
